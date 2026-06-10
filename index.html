@@ -263,7 +263,8 @@
   tr.g-event-row td.g-label { background: #f5f6ff; font-size: 10px; color: #888; font-weight: 600; }
 
   /* 간트 */
-  .gantt-wrap { background: #fff; border-radius: 12px; padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); margin-bottom: 28px; overflow-x: auto; }
+  .gantt-wrap { background: #fff; border-radius: 12px; padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); margin-bottom: 28px; }
+.gantt-scroll { overflow-x: auto; overflow-y: visible; width: 100%; -webkit-overflow-scrolling: touch; }
   .gantt-header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
   .gantt-header-row h2 { font-size: 15px; font-weight: 700; color: #1a1a2e; }
   .gantt-hint { font-size: 11px; color: #888; background: #f0f2f5; padding: 3px 8px; border-radius: 10px; }
@@ -331,7 +332,9 @@
     <h2>📊 Sprint 타임라인</h2>
     <span class="gantt-hint">26년 6월 ~ 27년 12월 · 1칸 = 1주 · 1행: 단계별 색상 / 2행: Sprint</span>
   </div>
-  <div id="gantt-root"></div>
+  <div class="gantt-scroll">
+    <div id="gantt-root"></div>
+  </div>
 </div>
 
 <div id="calendar-root"></div>
@@ -426,8 +429,8 @@ let sprints = [
   { id:'S04', totalStart:'2026-12-07', totalEnd:'2027-01-16', dev:['2026-12-07','2026-12-24'], plan:['2026-12-28','2026-12-29'], qa:['2026-12-30','2027-01-15'], devD:14, planD:2, qaD:12, note:'신정(01/01) → QA' },
   { id:'S05', totalStart:'2027-01-18', totalEnd:'2027-02-27', dev:['2027-01-18','2027-02-08'], plan:['2027-02-09','2027-02-10'], qa:['2027-02-11','2027-02-26'], devD:13, planD:2, qaD:12, note:'설날(01/27~01/30) → Dev' },
   { id:'S06', totalStart:'2027-03-02', totalEnd:'2027-04-09', dev:['2027-03-02','2027-03-19'], plan:['2027-03-22','2027-03-23'], qa:['2027-03-24','2027-04-09'], devD:14, planD:2, qaD:13, note:'-' },
-  { id:'S07', totalStart:'2027-04-12', totalEnd:'2027-05-12', dev:['2027-04-12','2027-04-27'], plan:['2027-04-28','2027-04-29'], qa:['2027-04-30','2027-05-17'], devD:12, planD:2, qaD:10, note:'어린이날(05/05) → QA / 부처님오신날(05/06) → QA' },
-  { id:'S08', totalStart:'2027-05-13', totalEnd:'2027-07-02', dev:['2027-05-13','2027-06-07'], plan:['2027-06-08','2027-06-10'], qa:['2027-06-11','2027-07-02'], devD:18, planD:3, qaD:16, note:'현충일(06/06) → Dev' },
+  { id:'S07', totalStart:'2027-04-12', totalEnd:'2027-05-21', dev:['2027-04-12','2027-04-27'], plan:['2027-04-28','2027-04-29'], qa:['2027-04-30','2027-05-21'], devD:12, planD:2, qaD:12, note:'어린이날(05/05) → QA / 부처님오신날(05/06) → QA' },
+  { id:'S08', totalStart:'2027-05-24', totalEnd:'2027-07-02', dev:['2027-05-24','2027-06-08'], plan:['2027-06-09','2027-06-14'], qa:['2027-06-15','2027-07-02'], devD:11, planD:3, qaD:14, note:'현충일(06/06) → Dev' },
   { id:'S09', totalStart:'2027-07-05', totalEnd:'2027-08-13', dev:['2027-07-05','2027-07-23'], plan:['2027-07-26','2027-07-28'], qa:['2027-07-29','2027-08-13'], devD:15, planD:3, qaD:12, note:'-' },
   { id:'S10', totalStart:'2027-08-16', totalEnd:'2027-09-17', dev:['2027-08-16','2027-08-31'], plan:['2027-09-01','2027-09-02'], qa:['2027-09-03','2027-09-21'], devD:12, planD:2, qaD:10, note:'추석(09/15~09/18) → QA' },
 ];
