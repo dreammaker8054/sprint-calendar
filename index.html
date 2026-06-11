@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sprint 일정 관리</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-database-compat.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; background: #f0f2f5; display: flex; height: 100vh; overflow: hidden; }
@@ -595,6 +597,102 @@ var currentSprintId = '';
 var currentMemoKey = '';
 var epTargetKey = '';
 var epSelectedColor = 0;
+
+/* ════════ 로컬 저장 + Firebase 동기화 ════════ */
+var STORAGE_KEY = 'sprintManagerData_v1';
+
+/* ───────────────────────────────────────────
+   ★ Firebase 설정 ★
+   Firebase 콘솔 → 프로젝트 설정 → 웹 앱에서 복사한
+   firebaseConfig 값을 아래에 붙여넣으세요.
+   databaseURL이 비어 있으면 로컬 저장만 동작합니다.
+─────────────────────────────────────────── */
+var FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAOHcZpwtU8ZGSyy_ORgdJyb3u-zqcDHQo",
+  authDomain: "sprint-manager-8a813.firebaseapp.com",
+  databaseURL: "https://sprint-manager-8a813-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "sprint-manager-8a813",
+  storageBucket: "sprint-manager-8a813.firebasestorage.app",
+  messagingSenderId: "298899000172",
+  appId: "1:298899000172:web:d6e3ae956a82dba3684149"
+};
+
+var fbRef = null;            // Firebase DB 참조
+var lastSyncedJson = '';     // 마지막 동기화 데이터 (에코 방지)
+var fbSaveTimer = null;      // 저장 디바운스 타이머
+var fbReady = false;
+
+function currentJson(){
+  return JSON.stringify({projects:projects,currentProjId:currentProjId});
+}
+
+function initFirebase(){
+  try{
+    if(!FIREBASE_CONFIG.databaseURL || !FIREBASE_CONFIG.apiKey) return false;
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbRef = firebase.database().ref('sprintManagerData');
+    fbReady = true;
+    return true;
+  }catch(e){
+    console.warn('Firebase 초기화 실패:', e);
+    return false;
+  }
+}
+
+function startFirebaseSync(){
+  if(!fbReady) return;
+  // 실시간 수신: 다른 사람이 수정하면 내 화면도 갱신
+  fbRef.on('value', function(snap){
+    var data = snap.val();
+    if(!data || !data.projects || !data.projects.length) return;
+    var incomingJson = JSON.stringify({projects:data.projects,currentProjId:data.currentProjId});
+    // 내가 방금 저장한 데이터의 에코이거나 현재 상태와 같으면 무시
+    if(incomingJson === lastSyncedJson || incomingJson === currentJson()) return;
+    projects = data.projects;
+    // 내가 보던 프로젝트는 유지 (없어졌으면 첫 번째로)
+    if(!projects.find(function(p){return p.id===currentProjId;})) currentProjId = projects[0].id;
+    lastSyncedJson = incomingJson;
+    renderAllNoSave();
+    showToast('🔄 다른 사용자의 변경이 반영됐습니다','success');
+  });
+}
+
+function saveState(){
+  var json = currentJson();
+  // 1) 로컬 백업
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      projects: projects, currentProjId: currentProjId, savedAt: new Date().toISOString()
+    }));
+  }catch(e){}
+  // 2) Firebase 저장 (600ms 디바운스 — 연속 수정 시 마지막만 전송)
+  if(fbReady && json !== lastSyncedJson){
+    clearTimeout(fbSaveTimer);
+    fbSaveTimer = setTimeout(function(){
+      lastSyncedJson = currentJson();
+      fbRef.set({
+        projects: projects,
+        currentProjId: currentProjId,
+        savedAt: new Date().toISOString()
+      }).catch(function(e){
+        showToast('❌ 클라우드 저장 실패: '+e.message,'error');
+      });
+    }, 600);
+  }
+}
+
+function loadState(){
+  try{
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    var data = JSON.parse(raw);
+    if(!data.projects || !data.projects.length) return false;
+    projects = data.projects;
+    currentProjId = data.currentProjId;
+    if(!projects.find(function(p){return p.id===currentProjId;})) currentProjId = projects[0].id;
+    return true;
+  }catch(e){ return false; }
+}
 
 /* ════════ Undo / Redo ════════ */
 var undoStack = [];
@@ -1238,7 +1336,8 @@ function renderGantt(){
   root.appendChild(table);
 }
 
-function renderAll(){ renderTable(); renderCalendar(); renderGantt(); renderSidebar(); }
+function renderAll(){ renderTable(); renderCalendar(); renderGantt(); renderSidebar(); saveState(); }
+function renderAllNoSave(){ renderTable(); renderCalendar(); renderGantt(); renderSidebar(); }
 
 /* ════════ 스프린트 메모 ════════ */
 function openSprintMemo(spid){
@@ -1285,6 +1384,7 @@ function saveSprintMemo(){
   closeSprintMemo();
   var btn=document.querySelector('.sprint-memo-btn[data-spid="'+currentSprintId+'"]');
   if(btn)btn.classList.toggle('has-sprint-memo',!!val);
+  saveState();
 }
 function deleteSprintMemo(){
   if(!confirm('스프린트 메모를 삭제하시겠습니까?'))return;
@@ -1293,6 +1393,7 @@ function deleteSprintMemo(){
   closeSprintMemo();
   var btn=document.querySelector('.sprint-memo-btn[data-spid="'+currentSprintId+'"]');
   if(btn)btn.classList.remove('has-sprint-memo');
+  saveState();
 }
 
 /* ════════ 월별 메모 ════════ */
@@ -1318,6 +1419,7 @@ function saveMemo(){
   curProj().memoStore[currentMemoKey]=val;
   closeMemoModal();
   renderCalendar();
+  saveState();
 }
 function deleteMemo(){
   if(!confirm('메모를 삭제하시겠습니까?'))return;
@@ -1325,6 +1427,7 @@ function deleteMemo(){
   delete curProj().memoStore[currentMemoKey];
   closeMemoModal();
   renderCalendar();
+  saveState();
 }
 
 /* ════════ 슬래시 팔레트 ════════ */
@@ -1429,12 +1532,14 @@ function saveEventCell(){
   else{delete curProj().eventStore[epTargetKey];}
   closeEventPopup();
   refreshEventCell(epTargetKey);
+  saveState();
 }
 function clearEventCell(){
   pushHistory();
   delete curProj().eventStore[epTargetKey];
   closeEventPopup();
   refreshEventCell(epTargetKey);
+  saveState();
 }
 function refreshEventCell(key){
   var td=document.querySelector('.g-event-cell[data-week-key="'+key+'"]');
@@ -1583,11 +1688,45 @@ document.getElementById('proj-title').addEventListener('keydown',function(e){
 
 /* ════════ 초기화 (맨 마지막 실행) ════════ */
 (function init(){
-  var p=makeEmptyProject('NUGU Auto (Volvo)','#4361ee');
-  p.sprints=makeDefaultSprints();
-  projects.push(p);
-  currentProjId=p.id;
-  renderAll();
+  var hasFb = initFirebase();
+
+  function fallbackInit(){
+    if(loadState()){
+      renderAllNoSave();
+      showToast('💾 저장된 데이터를 불러왔습니다','success');
+    } else {
+      var p=makeEmptyProject('NUGU Auto (Volvo)','#4361ee');
+      p.sprints=makeDefaultSprints();
+      projects.push(p);
+      currentProjId=p.id;
+      renderAll();
+    }
+  }
+
+  if(hasFb){
+    // Firebase에서 최신 데이터 우선 로드
+    fbRef.once('value').then(function(snap){
+      var data = snap.val();
+      if(data && data.projects && data.projects.length){
+        projects = data.projects;
+        currentProjId = data.currentProjId;
+        if(!projects.find(function(p){return p.id===currentProjId;})) currentProjId = projects[0].id;
+        lastSyncedJson = currentJson();
+        renderAllNoSave();
+        showToast('☁️ 클라우드 데이터를 불러왔습니다','success');
+      } else {
+        // 클라우드가 비어있으면 로컬 → 기본값 순서로 시작 후 클라우드에 업로드
+        fallbackInit();
+        saveState();
+      }
+      startFirebaseSync();
+    }).catch(function(e){
+      showToast('❌ 클라우드 연결 실패, 로컬 모드로 동작합니다','error');
+      fallbackInit();
+    });
+  } else {
+    fallbackInit();
+  }
 })();
 </script>
 </body>
